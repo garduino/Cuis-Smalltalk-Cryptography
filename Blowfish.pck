@@ -1,4 +1,4 @@
-'From Cuis 4.0 of 21 April 2012 [latest update: #1267] on 30 April 2012 at 8:02:51 pm'!
+'From Cuis 4.0 of 21 April 2012 [latest update: #1270] on 1 May 2012 at 10:55:50 am'!
 'Description Please enter a description for this package '!
 !classDefinition: #Blowfish category: #Blowfish!
 Object subclass: #Blowfish
@@ -733,6 +733,22 @@ testLongDecryptionTest(1 to: keys size) do:[:each | |key clearText cipherText 
 !BlowfishTests methodsFor: 'as yet unclassified' stamp: 'PaulDeBruicker 4/25/2011 13:33'!
 testLongEncryptionTest(1 to: keys size) do:[:each | |key clearText cipherText enc| 	key:= keys at: each.	clearText:=clear at: each.	cipherText:=encrypted at: each.	enc:=Blowfish encrypt: clearText  with: key.   	self assert:   (enc = cipherText )	]! !
 
-!ByteArray class methodsFor: '*Blowfish' stamp: 'gsa 4/30/2012 19:21'!
+!ByteArray class methodsFor: '*Blowfish' stamp: 'gsa 5/1/2012 10:47'!
 fromHexString: aString
+
 	^ self readHexFrom: aString! !
+
+!Integer methodsFor: '*Blowfish' stamp: 'gsa 4/30/2012 19:23'!
+asByteArray
+
+	| stream |
+	stream := WriteStream on: ByteArray new.
+	self digitLength to: 1 by: -1 do: [:digitIndex |
+		stream nextPut: (self digitAt: digitIndex)].
+	^ stream contents! !
+
+!String class methodsFor: '*Blowfish' stamp: 'gsa 4/30/2012 20:02'!
+fromByteArray: aByteArray
+
+	^ aByteArray asString
+! !
