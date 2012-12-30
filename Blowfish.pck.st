@@ -1,4 +1,4 @@
-'From Cuis 4.0 of 21 April 2012 [latest update: #1270] on 1 May 2012 at 10:55:50 am'!
+'From Cuis 4.1 of 12 December 2012 [latest update: #1524] on 30 December 2012 at 6:38:48 pm'!
 'Description Please enter a description for this package '!
 !classDefinition: #Blowfish category: #Blowfish!
 Object subclass: #Blowfish
