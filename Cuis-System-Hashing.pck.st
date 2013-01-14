@@ -1,5 +1,35 @@
-'From Cuis 4.1 of 12 December 2012 [latest update: #1524] on 30 December 2012 at 6:40:12 pm'!
+'From Cuis 4.1 of 12 December 2012 [latest update: #1549] on 14 January 2013 at 3:09:45 pm'!
 'Description Please enter a description for this package '!
+!classDefinition: #HMAC category: #'Cuis-System-Hashing'!
+Object subclass: #HMAC
+	instanceVariableNames: 'hash key ipad epad'
+	classVariableNames: ''
+	poolDictionaries: ''
+	category: 'Cuis-System-Hashing'!
+!classDefinition: 'HMAC class' category: #'Cuis-System-Hashing'!
+HMAC class
+	instanceVariableNames: ''!
+
+!classDefinition: #HashFunction category: #'Cuis-System-Hashing'!
+Object subclass: #HashFunction
+	instanceVariableNames: ''
+	classVariableNames: ''
+	poolDictionaries: ''
+	category: 'Cuis-System-Hashing'!
+!classDefinition: 'HashFunction class' category: #'Cuis-System-Hashing'!
+HashFunction class
+	instanceVariableNames: ''!
+
+!classDefinition: #SHA1 category: #'Cuis-System-Hashing'!
+HashFunction subclass: #SHA1
+	instanceVariableNames: 'totalA totalB totalC totalD totalE totals'
+	classVariableNames: 'K1 K2 K3 K4'
+	poolDictionaries: ''
+	category: 'Cuis-System-Hashing'!
+!classDefinition: 'SHA1 class' category: #'Cuis-System-Hashing'!
+SHA1 class
+	instanceVariableNames: ''!
+
 !classDefinition: #SecureHashAlgorithm category: #'Cuis-System-Hashing'!
 Object subclass: #SecureHashAlgorithm
 	instanceVariableNames: 'totalA totalB totalC totalD totalE totals'
@@ -31,6 +61,22 @@ ThirtyTwoBitRegister class
 	instanceVariableNames: ''!
 
 
+!HMAC commentStamp: '<historical>' prior: 0!
+HMAC is a mechanism for message authentication using cryptographic hash functions. HMAC can be used with any iterative cryptographic hash function, e.g., MD5, SHA-1, in combination with a secret shared key.  The cryptographic strength of HMAC depends on the properties of the underlying hash function.
+
+See RFC 2114.!
+
+!SHA1 commentStamp: '<historical>' prior: 0!
+This class implements the Secure Hash Algorithm (SHA) described in the U.S. government's Secure Hash Standard (SHS). This standard is described in FIPS PUB 180-1, "SECURE HASH STANDARD", April 17, 1995.
+
+The Secure Hash Algorithm is also described on p. 442 of 'Applied Cryptography: Protocols, Algorithms, and Source Code in C' by Bruce Scheier, Wiley, 1996.
+
+See the comment in class DigitalSignatureAlgorithm for details on its use.
+
+Implementation notes:
+The secure hash standard was created with 32-bit hardware in mind. All arithmetic in the hash computation must be done modulo 2^32. This implementation uses ThirtyTwoBitRegister objects to simulate hardware registers; this implementation is about six times faster than using LargePositiveIntegers (measured on a Macintosh G3 Powerbook). Implementing a primitive to process each 64-byte buffer would probably speed up the computation by a factor of 20 or more.
+!
+
 !SecureHashAlgorithm commentStamp: '<historical>' prior: 0!
 This class implements the Secure Hash Algorithm (SHA) described in the U.S. government's Secure Hash Standard (SHS). This standard is described in FIPS PUB 180-1, "SECURE HASH STANDARD", April 17, 1995.The Secure Hash Algorithm is also described on p. 442 of 'Applied Cryptography: Protocols, Algorithms, and Source Code in C' by Bruce Scheier, Wiley, 1996.See the comment in class DigitalSignatureAlgorithm for details on its use.Implementation notes:The secure hash standard was created with 32-bit hardware in mind. All arithmetic in the hash computation must be done modulo 2^32. This implementation uses ThirtyTwoBitRegister objects to simulate hardware registers; this implementation is about six times faster than using LargePositiveIntegers (measured on a Macintosh G3 Powerbook). Implementing a primitive to process each 64-byte buffer would probably speed up the computation by a factor of 20 or more.!
 
@@ -39,6 +85,445 @@ This is the unit test for the class SecureHashAlgorithm. Unit tests are a good w
 
 !ThirtyTwoBitRegister commentStamp: '<historical>' prior: 0!
 I represent a 32-bit register. An instance of me can hold any non-negative integer in the range [0..(2^32 - 1)]. Operations are performed on my contents in place, like a hardware register, and results are always modulo 2^32.This class is primarily meant for use by the SecureHashAlgorithm class.!
+
+!ByteArray methodsFor: '*Cuis-System-Hashing' stamp: 'gsa 1/14/2013 15:07'!
+asByteArrayOfSize: size
+	"
+		'34523' asByteArray asByteArrayOfSize: 100.
+
+	(((
+		| repeats bytes | 
+		repeats := 1000000.
+		bytes := '123456789123456789123456789123456789123456789123456789' asByteArray.
+		 [repeats timesRepeat: (bytes asByteArrayOfSize: 1024) ] timeToRun.
+	)))"
+
+	| bytes |
+	size < self size
+		ifTrue: [^ self error: 'bytearray bigger than ', size asString].
+	bytes := self asByteArray.
+	^ (ByteArray new: (size - bytes size)), bytes
+! !
+
+!HMAC methodsFor: 'accessing' stamp: 'cmm 12/2/2006 14:57'!
+destroy
+	key destroy! !
+
+!HMAC methodsFor: 'accessing' stamp: 'len 10/16/2002 16:43'!
+digestMessage: aByteArray
+	^ hash hashMessage: (key bitXor: epad), (hash hashMessage: (key bitXor: ipad), aByteArray)! !
+
+!HMAC methodsFor: 'accessing' stamp: 'len 8/3/2002 02:06'!
+digestSize
+	^ hash hashSize! !
+
+!HMAC methodsFor: 'accessing' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+key: aByteArray 
+	key := aByteArray.
+	key size > hash blockSize ifTrue: [ key := hash hashMessage: key ].
+	key size < hash blockSize ifTrue: [ key := key , (ByteArray new: hash blockSize - key size) ]! !
+
+!HMAC methodsFor: 'printing' stamp: 'len 8/3/2002 02:08'!
+printOn: aStream
+	aStream nextPutAll: 'HMAC-'; print: hash! !
+
+!HMAC methodsFor: 'initialization' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+setHash: aHash 
+	hash := aHash.
+	ipad := ByteArray 
+		new: aHash blockSize
+		withAll: 54.
+	epad := ByteArray 
+		new: aHash blockSize
+		withAll: 92! !
+
+!HMAC class methodsFor: 'instance creation' stamp: 'len 8/15/2002 01:42'!
+on: aHashFunction
+	^ self new setHash: aHashFunction! !
+
+!HashFunction methodsFor: 'accessing' stamp: 'len 8/15/2002 01:43'!
+blockSize
+	^ self class blockSize! !
+
+!HashFunction methodsFor: 'accessing' stamp: 'cmm 2/20/2006 23:22'!
+doubleHashMessage: aStringOrByteArray
+	"SHA1 new doubleHashMessage: 'foo'"
+	^ self doubleHashStream: aStringOrByteArray asByteArray readStream! !
+
+!HashFunction methodsFor: 'accessing' stamp: 'cmm 2/20/2006 23:21'!
+doubleHashStream: aStream
+	^ self hashStream: ((self hashStream: aStream) asByteArray readStream)! !
+
+!HashFunction methodsFor: 'accessing' stamp: 'len 8/7/2002 16:30'!
+hashMessage: aStringOrByteArray
+	"MD5 new hashMessage: 'foo'"
+	^ self hashStream: aStringOrByteArray asByteArray readStream! !
+
+!HashFunction methodsFor: 'accessing' stamp: 'len 8/9/2002 13:17'!
+hashSize
+	^ self class hashSize! !
+
+!HashFunction methodsFor: 'accessing' stamp: 'len 8/2/2002 02:21'!
+hashStream: aStream
+	^ self subclassResponsibility! !
+
+!HashFunction methodsFor: 'converting' stamp: 'len 8/3/2002 02:42'!
+hmac
+	^ HMAC on: self! !
+
+!HashFunction class methodsFor: 'accessing' stamp: 'len 8/15/2002 01:43'!
+blockSize
+	^ self subclassResponsibility! !
+
+!HashFunction class methodsFor: 'hashing' stamp: 'len 8/2/2002 02:20'!
+hashMessage: aStringOrByteArray
+	^ self new hashMessage: aStringOrByteArray! !
+
+!HashFunction class methodsFor: 'accessing' stamp: 'len 8/9/2002 13:17'!
+hashSize
+	^ self subclassResponsibility! !
+
+!HashFunction class methodsFor: 'hashing' stamp: 'len 8/2/2002 02:20'!
+hashStream: aPositionableStream
+	^ self new hashStream: aPositionableStream! !
+
+!Integer methodsFor: '*Cuis-System-Hashing' stamp: 'gsa 1/14/2013 15:08'!
+asByteArrayOfSize: aSize 
+	"Answer a ByteArray of aSize with my value, most-significant byte first."
+	| answer digitPos |
+	aSize < self digitLength ifTrue: [ self error: 'number to large for byte array' ].
+	answer := ByteArray new: aSize.
+	digitPos := 1.
+	aSize 
+		to: aSize - self digitLength + 1
+		by: -1
+		do: 
+			[ :pos | 
+			answer 
+				at: pos
+				put: (self digitAt: digitPos).
+			digitPos := digitPos + 1 ].
+	^ answer! !
+
+!SHA1 methodsFor: 'private' stamp: 'jm 12/7/1999 23:25'!
+constantForStep: i
+	"Answer the constant for the i-th step of the block hash loop. We number our steps 1-80, versus the 0-79 of the standard."
+
+	i <= 20 ifTrue: [^ K1].
+	i <= 40 ifTrue: [^ K2].
+	i <= 60 ifTrue: [^ K3].
+	^ K4
+! !
+
+!SHA1 methodsFor: 'private' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+expandedBlock: aByteArray 
+	"Convert the given 64 byte buffer into 80 32-bit registers and answer the result."
+	| out src v |
+	out := Array new: 80.
+	src := 1.
+	1 
+		to: 16
+		do: 
+			[ :i | 
+			out 
+				at: i
+				put: (ThirtyTwoBitRegister new 
+						loadFrom: aByteArray
+						at: src).
+			src := src + 4 ].
+	17 
+		to: 80
+		do: 
+			[ :i | 
+			v := (out at: i - 3) copy.
+			v
+				bitXor: (out at: i - 8);
+				bitXor: (out at: i - 14);
+				bitXor: (out at: i - 16);
+				leftRotateBy: 1.
+			out 
+				at: i
+				put: v ].
+	^ out! !
+
+!SHA1 methodsFor: 'private' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+finalHash
+	"Concatenate the final totals to build the 160-bit integer result."
+	"Details: If the primitives are supported, the results are in the totals array. Otherwise, they are in the instance variables totalA through totalE."
+	| r |
+	totals ifNil: 
+		[ "compute final hash when not using primitives"
+		^ (totalA asInteger bitShift: 128) + (totalB asInteger bitShift: 96) + (totalC asInteger bitShift: 64) + (totalD asInteger bitShift: 32) + totalE asInteger ].
+
+	"compute final hash when using primitives"
+	r := 0.
+	1 
+		to: 5
+		do: [ :i | r := r bitOr: ((totals at: i) bitShift: 32 * (5 - i)) ].
+	^ r! !
+
+!SHA1 methodsFor: 'private' stamp: 'jm 12/7/1999 22:15'!
+hashFunction: i of: x with: y with: z
+	"Compute the hash function for the i-th step of the block hash loop. We number our steps 1-80, versus the 0-79 of the standard."
+	"Details: There are four functions, one for each 20 iterations. The second and fourth are the same."
+
+	i <= 20 ifTrue: [^ x copy bitAnd: y; bitOr: (x copy bitInvert; bitAnd: z)].
+	i <= 40 ifTrue: [^ x copy bitXor: y; bitXor: z].
+	i <= 60 ifTrue: [^ x copy bitAnd: y; bitOr: (x copy bitAnd: z); bitOr: (y copy bitAnd: z)].
+	^ x copy bitXor: y; bitXor: z
+! !
+
+!SHA1 methodsFor: 'accessing' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+hashInteger: aPositiveInteger 
+	"Hash the given positive integer. The integer to be hashed should have 512 or fewer bits. This entry point is used in key generation."
+	| buffer dstIndex |
+	self initializeTotals.
+
+	"pad integer with zeros"
+	aPositiveInteger highBit <= 512 ifFalse: [ self error: 'integer cannot exceed 512 bits' ].
+	buffer := ByteArray new: 64.
+	dstIndex := 0.
+	aPositiveInteger digitLength 
+		to: 1
+		by: -1
+		do: 
+			[ :i | 
+			buffer 
+				at: (dstIndex := dstIndex + 1)
+				put: (aPositiveInteger digitAt: i) ].
+
+	"process that one block"
+	self processBuffer: buffer.
+	^ self finalHash! !
+
+!SHA1 methodsFor: 'accessing' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+hashInteger: aPositiveInteger seed: seedInteger 
+	"Hash the given positive integer. The integer to be hashed should have 512 or fewer bits. This entry point is used in the production of random numbers"
+	"Initialize totalA through totalE to their seed values."
+	| buffer dstIndex |
+	totalA := ThirtyTwoBitRegister new load: ((seedInteger bitShift: -128) bitAnd: 4294967295).
+	totalB := ThirtyTwoBitRegister new load: ((seedInteger bitShift: -96) bitAnd: 4294967295).
+	totalC := ThirtyTwoBitRegister new load: ((seedInteger bitShift: -64) bitAnd: 4294967295).
+	totalD := ThirtyTwoBitRegister new load: ((seedInteger bitShift: -32) bitAnd: 4294967295).
+	totalE := ThirtyTwoBitRegister new load: (seedInteger bitAnd: 4294967295).
+	self initializeTotalsArray.
+
+	"pad integer with zeros"
+	buffer := ByteArray new: 64.
+	dstIndex := 0.
+	aPositiveInteger digitLength 
+		to: 1
+		by: -1
+		do: 
+			[ :i | 
+			buffer 
+				at: (dstIndex := dstIndex + 1)
+				put: (aPositiveInteger digitAt: i) ].
+
+	"process that one block"
+	self processBuffer: buffer.
+	^ self finalHash! !
+
+!SHA1 methodsFor: 'accessing' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+hashStream: aPositionableStream 
+	"Hash the contents of the given stream from the current position to the end using the Secure Hash Algorithm. The SHA algorithm is defined in FIPS PUB 180-1. It is also described on p. 442 of 'Applied Cryptography: Protocols, Algorithms, and Source Code in C' by Bruce Scheier, Wiley, 1996."
+	"SecureHashAlgorithm new hashStream: (ReadStream on: 'foo')"
+	| startPosition buf bitLength |
+	self initializeTotals.
+	aPositionableStream atEnd ifTrue: [ self error: 'empty stream' ].
+	startPosition := aPositionableStream position.
+	[ aPositionableStream atEnd ] whileFalse: 
+		[ buf := aPositionableStream next: 64.
+		(aPositionableStream atEnd not and: [ buf size = 64 ]) 
+			ifTrue: [ self processBuffer: buf ]
+			ifFalse: 
+				[ bitLength := (aPositionableStream position - startPosition) * 8.
+				self 
+					processFinalBuffer: buf
+					bitLength: bitLength ] ].
+	^ self finalHash asByteArrayOfSize: 20! !
+
+!SHA1 methodsFor: 'private' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+initializeTotals
+	"Initialize totalA through totalE to their seed values."
+	"total registers for use when primitives are absent"
+	totalA := ThirtyTwoBitRegister new load: 1732584193.
+	totalB := ThirtyTwoBitRegister new load: 4023233417.
+	totalC := ThirtyTwoBitRegister new load: 2562383102.
+	totalD := ThirtyTwoBitRegister new load: 271733878.
+	totalE := ThirtyTwoBitRegister new load: 3285377520.
+	self initializeTotalsArray! !
+
+!SHA1 methodsFor: 'private' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+initializeTotalsArray
+	"Initialize the totals array from the registers for use with the primitives."
+	totals := Bitmap new: 5.
+	totals 
+		at: 1
+		put: totalA asInteger.
+	totals 
+		at: 2
+		put: totalB asInteger.
+	totals 
+		at: 3
+		put: totalC asInteger.
+	totals 
+		at: 4
+		put: totalD asInteger.
+	totals 
+		at: 5
+		put: totalE asInteger! !
+
+!SHA1 methodsFor: 'primitives' stamp: 'jm 12/21/1999 20:11'!
+primExpandBlock: aByteArray into: wordBitmap
+	"Expand the given 64-byte buffer into the given Bitmap of length 80."
+
+	<primitive: 'primitiveExpandBlock' module: 'DSAPrims'>
+	^ self primitiveFailed
+! !
+
+!SHA1 methodsFor: 'primitives' stamp: 'jm 12/21/1999 22:58'!
+primHasSecureHashPrimitive
+	"Answer true if this platform has primitive support for the Secure Hash Algorithm."
+
+	<primitive: 'primitiveHasSecureHashPrimitive' module: 'DSAPrims'>
+	^ false
+! !
+
+!SHA1 methodsFor: 'primitives' stamp: 'jm 12/21/1999 20:13'!
+primHashBlock: blockBitmap using: workingTotalsBitmap
+	"Hash the given block (a Bitmap) of 80 32-bit words, using the given workingTotals."
+
+	<primitive: 'primitiveHashBlock' module: 'DSAPrims'>
+	^ self primitiveFailed
+! !
+
+!SHA1 methodsFor: 'private' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+processBuffer: aByteArray 
+	"Process given 64-byte buffer, accumulating the results in totalA through totalE."
+	| a b c d e w tmp |
+	self primHasSecureHashPrimitive 
+		ifTrue: [ ^ self processBufferUsingPrimitives: aByteArray ]
+		ifFalse: [ totals := nil ].
+
+	"initialize registers a through e from the current totals"
+	a := totalA copy.
+	b := totalB copy.
+	c := totalC copy.
+	d := totalD copy.
+	e := totalE copy.
+
+	"expand and process the buffer"
+	w := self expandedBlock: aByteArray.
+	1 
+		to: 80
+		do: 
+			[ :i | 
+			tmp := (a copy leftRotateBy: 5)
+				+= (self 
+						hashFunction: i
+						of: b
+						with: c
+						with: d);
+				+= e;
+				+= (w at: i);
+				+= (self constantForStep: i).
+			e := d.
+			d := c.
+			c := b copy leftRotateBy: 30.
+			b := a.
+			a := tmp ].
+
+	"add a through e into total accumulators"
+	totalA += a.
+	totalB += b.
+	totalC += c.
+	totalD += d.
+	totalE += e! !
+
+!SHA1 methodsFor: 'private' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+processBufferUsingPrimitives: aByteArray 
+	"Process given 64-byte buffer using the primitives, accumulating the results in totals."
+	"expand and process the buffer"
+	| w |
+	w := Bitmap new: 80.
+	self 
+		primExpandBlock: aByteArray
+		into: w.
+	self 
+		primHashBlock: w
+		using: totals! !
+
+!SHA1 methodsFor: 'private' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+processFinalBuffer: buffer bitLength: bitLength 
+	"Process given buffer, whose length may be <= 64 bytes, accumulating the results in totalA through totalE. Also process the final padding bits and length."
+	| out |
+	out := ByteArray new: 64.
+	out 
+		replaceFrom: 1
+		to: buffer size
+		with: buffer
+		startingAt: 1.
+	buffer size < 56 ifTrue: 
+		[ "padding and length fit in last data block"
+		out 
+			at: buffer size + 1
+			put: 128.	"trailing one bit"
+		self 
+			storeLength: bitLength
+			in: out.	"end with length"
+		self processBuffer: out.
+		^ self ].
+
+	"process the final data block"
+	buffer size < 64 ifTrue: 
+		[ out 
+			at: buffer size + 1
+			put: 128 ].	"trailing one bit"
+	self processBuffer: out.
+
+	"process one additional block of padding ending with the length"
+	out := ByteArray new: 64.	"filled with zeros"
+	buffer size = 64 ifTrue: 
+		[ "add trailing one bit that didn't fit in final data block"
+		out 
+			at: 1
+			put: 128 ].
+	self 
+		storeLength: bitLength
+		in: out.
+	self processBuffer: out! !
+
+!SHA1 methodsFor: 'private' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+storeLength: bitLength in: aByteArray 
+	"Fill in the final 8 bytes of the given ByteArray with a 64-bit big-endian representation of the original message length in bits."
+	| n i |
+	n := bitLength.
+	i := aByteArray size.
+	[ n > 0 ] whileTrue: 
+		[ aByteArray 
+			at: i
+			put: (n bitAnd: 255).
+		n := n bitShift: -8.
+		i := i - 1 ]! !
+
+!SHA1 class methodsFor: 'accessing' stamp: 'rww 9/22/2006 19:25'!
+blockSize
+	^ 64! !
+
+!SHA1 class methodsFor: 'accessing' stamp: 'len 8/15/2002 01:45'!
+hashSize
+	^ 20! !
+
+!SHA1 class methodsFor: 'class initialization' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+initialize
+	"SecureHashAlgorithm initialize"
+	"For the curious, here's where these constants come from:
+	  #(2 3 5 10) collect: [:x | ((x sqrt / 4.0) * (2.0 raisedTo: 32)) truncated hex]"
+	K1 := ThirtyTwoBitRegister new load: 1518500249.
+	K2 := ThirtyTwoBitRegister new load: 1859775393.
+	K3 := ThirtyTwoBitRegister new load: 2400959708.
+	K4 := ThirtyTwoBitRegister new load: 3395469782! !
 
 !SecureHashAlgorithm methodsFor: 'private' stamp: 'jm 12/7/1999 23:25'!
 constantForStep: i	"Answer the constant for the i-th step of the block hash loop. We number our steps 1-80, versus the 0-79 of the standard."	i <= 20 ifTrue: [^ K1].	i <= 40 ifTrue: [^ K2].	i <= 60 ifTrue: [^ K3].	^ K4! !
@@ -172,4 +657,5 @@ storeInto: aByteArray at: index	"Store my 32-bit value into the four bytes of t
 
 !ThirtyTwoBitRegister class methodsFor: 'instance creation' stamp: 'jm 12/14/1999 16:05'!
 new	"Answer a new instance whose initial contents is zero."	^ super new load: 0! !
+SHA1 initialize!
 SecureHashAlgorithm initialize!
