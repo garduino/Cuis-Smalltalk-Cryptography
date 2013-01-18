@@ -1,4 +1,4 @@
-'From Cuis 4.1 of 12 December 2012 [latest update: #1549] on 14 January 2013 at 3:09:45 pm'!
+'From Cuis 4.1 of 12 December 2012 [latest update: #1561] on 18 January 2013 at 8:58:31 am'!
 'Description Please enter a description for this package '!
 !classDefinition: #HMAC category: #'Cuis-System-Hashing'!
 Object subclass: #HMAC
@@ -18,6 +18,26 @@ Object subclass: #HashFunction
 	category: 'Cuis-System-Hashing'!
 !classDefinition: 'HashFunction class' category: #'Cuis-System-Hashing'!
 HashFunction class
+	instanceVariableNames: ''!
+
+!classDefinition: #MD5 category: #'Cuis-System-Hashing'!
+HashFunction subclass: #MD5
+	instanceVariableNames: 'state'
+	classVariableNames: ''
+	poolDictionaries: ''
+	category: 'Cuis-System-Hashing'!
+!classDefinition: 'MD5 class' category: #'Cuis-System-Hashing'!
+MD5 class
+	instanceVariableNames: ''!
+
+!classDefinition: #MD5NonPrimitive category: #'Cuis-System-Hashing'!
+MD5 subclass: #MD5NonPrimitive
+	instanceVariableNames: ''
+	classVariableNames: 'ABCDTable IndexTable ShiftTable SinTable'
+	poolDictionaries: ''
+	category: 'Cuis-System-Hashing'!
+!classDefinition: 'MD5NonPrimitive class' category: #'Cuis-System-Hashing'!
+MD5NonPrimitive class
 	instanceVariableNames: ''!
 
 !classDefinition: #SHA1 category: #'Cuis-System-Hashing'!
@@ -65,6 +85,22 @@ ThirtyTwoBitRegister class
 HMAC is a mechanism for message authentication using cryptographic hash functions. HMAC can be used with any iterative cryptographic hash function, e.g., MD5, SHA-1, in combination with a secret shared key.  The cryptographic strength of HMAC depends on the properties of the underlying hash function.
 
 See RFC 2114.!
+
+!MD5 commentStamp: 'ul 3/3/2008 23:40' prior: 0!
+This class implements the MD5 128-bit one-way hash function. It uses the MD5Plugin for better performance. Some methods are taken from the original version of MD5NonPrimitive.!
+
+!MD5NonPrimitive commentStamp: '<historical>' prior: 0!
+This class implements the MD5 128-bit one-way hash function.  It relies on
+the ThirtyTwoBitRegister class supplied as part of the "Digital Signatures"
+functionality included in Squeak 2.7.  As of this date (1/20/2000), the
+U.S. Government has lifted many of the previous restrictions on the export
+of encryption software, but you should check before exporting anything
+including this code.  MD5 is commonly used for some secure Internet
+protocols, including authentication in HTTP, which is why I wrote it.
+
+Submitted by Duane Maxwell
+
+!
 
 !SHA1 commentStamp: '<historical>' prior: 0!
 This class implements the Secure Hash Algorithm (SHA) described in the U.S. government's Secure Hash Standard (SHS). This standard is described in FIPS PUB 180-1, "SECURE HASH STANDARD", April 17, 1995.
@@ -204,6 +240,369 @@ asByteArrayOfSize: aSize
 				put: (self digitAt: digitPos).
 			digitPos := digitPos + 1 ].
 	^ answer! !
+
+!MD5 methodsFor: 'private-buffers' stamp: 'ul 3/3/2008 21:34'!
+finalValue
+
+	^state! !
+
+!MD5 methodsFor: 'accessing' stamp: 'ul 3/3/2008 22:00'!
+hashStream: aPositionableStream
+
+	| startPosition buf bitLength |
+	self initialize.
+
+	aPositionableStream atEnd ifTrue: [
+		buf := ByteArray new: 64.
+		buf at: 1 put: 128.
+		self processBuffer: buf.
+		^self finalValue ].
+
+	startPosition := aPositionableStream position.
+	[aPositionableStream atEnd] whileFalse: [
+		buf := aPositionableStream next: 64.
+		(aPositionableStream atEnd not and: [buf size = 64])
+			ifTrue: [self processBuffer: buf]
+			ifFalse: [
+				bitLength := (aPositionableStream position - startPosition) * 8.
+				self processFinalBuffer: buf bitLength: bitLength]].
+
+	^ self finalValue! !
+
+!MD5 methodsFor: 'initialization' stamp: 'StephaneDucasse 2/3/2010 22:14'!
+initialize
+	"Some magic numbers to get the process started"
+
+	state :=  #[1 35 69 103 137 171 205 239 254 220 186 152 118 84 50 16]
+
+! !
+
+!MD5 methodsFor: 'private-buffers' stamp: 'ul 3/3/2008 22:28'!
+primProcessBuffer: aByteArray withState: s
+
+	<primitive: 'primitiveProcessBufferWithState' module: 'MD5Plugin'>
+	self primitiveFailed! !
+
+!MD5 methodsFor: 'private-buffers' stamp: 'ul 3/3/2008 19:17'!
+processBuffer: aByteArray
+
+	self primProcessBuffer: aByteArray withState: state.
+	! !
+
+!MD5 methodsFor: 'private-buffers' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+processFinalBuffer: aByteArray bitLength: bitLength 
+	"Pad the buffer until we have an even 64 bytes, then transform"
+	| out |
+	out := ByteArray new: 64.
+	out 
+		replaceFrom: 1
+		to: aByteArray size
+		with: aByteArray
+		startingAt: 1.
+	aByteArray size < 56 ifTrue: 
+		[ out 
+			at: aByteArray size + 1
+			put: 128.	"trailing bit"
+		self 
+			storeLength: bitLength
+			in: out.
+		self processBuffer: out.
+		^ self ].
+
+	"not enough room for the length, so just pad this one, then..."
+	aByteArray size < 64 ifTrue: 
+		[ out 
+			at: aByteArray size + 1
+			put: 128 ].
+	self processBuffer: out.
+
+	"process one additional block of padding ending with the length"
+	out := ByteArray new: 64.	"filled with zeros"
+	aByteArray size = 64 ifTrue: 
+		[ out 
+			at: 1
+			put: 128 ].
+	self 
+		storeLength: bitLength
+		in: out.
+	self processBuffer: out! !
+
+!MD5 methodsFor: 'private-buffers' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+storeLength: bitLength in: aByteArray 
+	"Fill in the final 8 bytes of the given ByteArray with a 64-bit
+	little-endian representation of the original message length in bits."
+	| n i |
+	n := bitLength.
+	i := aByteArray size - 8 + 1.
+	[ n > 0 ] whileTrue: 
+		[ aByteArray 
+			at: i
+			put: (n bitAnd: 255).
+		n := n bitShift: -8.
+		i := i + 1 ]! !
+
+!MD5 class methodsFor: 'accessing' stamp: 'ul 3/3/2008 23:37'!
+blockSize
+	^ 64! !
+
+!MD5 class methodsFor: 'accessing' stamp: 'ul 3/3/2008 23:37'!
+hashSize
+	^ 16! !
+
+!MD5 class methodsFor: 'as yet unclassified' stamp: 'ul 3/3/2008 22:46'!
+isPluginAvailable
+
+	<primitive: 'primitivePluginAvailable' module: 'MD5Plugin'>
+	^false! !
+
+!MD5 class methodsFor: 'as yet unclassified' stamp: 'ul 3/3/2008 23:01'!
+new
+
+	self isPluginAvailable 
+		ifTrue: [ ^self basicNew ]
+		ifFalse: [ ^MD5NonPrimitive basicNew ]! !
+
+!MD5NonPrimitive methodsFor: 'private-functions' stamp: 'DSM 1/20/2000 01:47'!
+fX: x Y: y Z: z
+	" compute 'xy or (not x)z'"
+	^ x copy bitAnd: y; bitOr: (x copy bitInvert; bitAnd: z)
+
+	! !
+
+!MD5NonPrimitive methodsFor: 'private-functions' stamp: 'DSM 1/20/2000 13:38'!
+ffA: a B: b C: c D: d M: m S: s T: t
+	"compute a = b + ((a + f(b,c,d) + m + t) <<< s)"
+	^ a += (self fX: b Y: c Z: d); += m; += t; leftRotateBy: s; += b.
+! !
+
+!MD5NonPrimitive methodsFor: 'private-buffers' stamp: 'len 10/15/2002 19:58'!
+finalValue
+	"Concatenate the state values to produce the 128-bite result"
+	^ (state at: 1) asByteArray, (state at: 2) asByteArray, (state at: 3) asByteArray, (state at: 4) asByteArray! !
+
+!MD5NonPrimitive methodsFor: 'private-functions' stamp: 'DSM 1/20/2000 01:48'!
+gX: x Y: y Z: z
+	" compute 'xz or y(not z)'"
+	^ x copy bitAnd: z; bitOr: (z copy bitInvert; bitAnd: y)
+
+	! !
+
+!MD5NonPrimitive methodsFor: 'private-functions' stamp: 'DSM 1/20/2000 13:38'!
+ggA: a B: b C: c D: d M: m S: s T: t
+	"compute a = b + ((a + g(b,c,d) + m + t) <<< s)"
+	^ a += (self gX: b Y: c Z: d); += m; += t; leftRotateBy: s; += b.
+! !
+
+!MD5NonPrimitive methodsFor: 'private-functions' stamp: 'DSM 1/20/2000 01:48'!
+hX: x Y: y Z: z
+	" compute 'x xor y xor z'"
+	^ x copy bitXor: y; bitXor: z
+
+	! !
+
+!MD5NonPrimitive methodsFor: 'private-functions' stamp: 'DSM 1/20/2000 13:38'!
+hhA: a B: b C: c D: d M: m S: s T: t
+	"compute a = b + ((a + h(b,c,d) + m + t) <<< s)"
+	^ a += (self hX: b Y: c Z: d); += m; += t; leftRotateBy: s; += b.
+! !
+
+!MD5NonPrimitive methodsFor: 'private-functions' stamp: 'DSM 1/20/2000 01:48'!
+iX: x Y: y Z: z
+	" compute 'y xor (x or (not z))'"
+	^ y copy bitXor: (z copy bitInvert; bitOr: x)
+! !
+
+!MD5NonPrimitive methodsFor: 'private-functions' stamp: 'DSM 1/20/2000 13:39'!
+iiA: a B: b C: c D: d M: m S: s T: t
+	"compute a = b + ((a + i(b,c,d) + m + t) <<< s)"
+	^ a += (self iX: b Y: c Z: d); += m; += t; leftRotateBy: s; += b.
+! !
+
+!MD5NonPrimitive methodsFor: 'initialization' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+initialize
+	"Some magic numbers to get the process started"
+	state := OrderedCollection newFrom: { 
+			(ThirtyTwoBitRegister new load: 1732584193).
+			(ThirtyTwoBitRegister new load: 4023233417).
+			(ThirtyTwoBitRegister new load: 2562383102).
+			(ThirtyTwoBitRegister new load: 271733878)
+		 }! !
+
+!MD5NonPrimitive methodsFor: 'private-buffers' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+processBuffer: aByteArray 
+	"Process a 64-byte buffer"
+	| saveState data |
+	saveState := state collect: [ :item | item copy ].
+	data := Array new: 16.
+	1 
+		to: 16
+		do: 
+			[ :index | 
+			data 
+				at: index
+				put: (ThirtyTwoBitRegister new 
+						reverseLoadFrom: aByteArray
+						at: index * 4 - 3) ].
+	self rounds: data.
+	1 
+		to: 4
+		do: [ :index | (state at: index) += (saveState at: index) ]! !
+
+!MD5NonPrimitive methodsFor: 'private-rounds' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+round: data selector: selector round: round 
+	"Do one round with the given function"
+	| shiftIndex template abcd |
+	1 
+		to: 16
+		do: 
+			[ :i | 
+			shiftIndex := (i - 1) \\ 4 + 1.
+			abcd := ABCDTable at: shiftIndex.
+			template := { 
+				(abcd at: 1).
+				(abcd at: 2).
+				(abcd at: 3).
+				(abcd at: 4).
+				((IndexTable at: round) at: i).
+				((ShiftTable at: round) at: shiftIndex).
+				(SinTable at: (round - 1) * 16 + i)
+			 }.
+			self 
+				step: data
+				template: template
+				selector: selector ]! !
+
+!MD5NonPrimitive methodsFor: 'private-rounds' stamp: 'DSM 1/20/2000 17:58'!
+rounds: data
+	"Perform the four rounds with different functions"
+	#(
+	ffA:B:C:D:M:S:T:
+	ggA:B:C:D:M:S:T:
+	hhA:B:C:D:M:S:T:
+	iiA:B:C:D:M:S:T:
+	) doWithIndex: [ :selector :index |
+		self round: data selector: selector round: index.]
+! !
+
+!MD5NonPrimitive methodsFor: 'private-functions' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+step: data template: item selector: selector 
+	"Perform one step in the round"
+	| args |
+	args := { 
+		(state at: (item at: 1)).
+		(state at: (item at: 2)).
+		(state at: (item at: 3)).
+		(state at: (item at: 4)).
+		(data at: (item at: 5)).
+		(item at: 6).
+		(item at: 7)
+	 }.
+	self 
+		perform: selector
+		withArguments: args! !
+
+!MD5NonPrimitive class methodsFor: 'class initialization' stamp: 'StephaneDucasse 10/17/2009 17:15'!
+initialize
+	"MD5 initialize"
+	"Obscure fact: those magic hex numbers that are hard to type in correctly are
+	actually the result of a simple trigonometric function and are therefore
+	easier to compute than proofread.  Laziness is sometimes a virtue."
+	| c |
+	c := 2 raisedTo: 32.
+	SinTable := Array new: 64.
+	1 
+		to: 64
+		do: 
+			[ :i | 
+			SinTable 
+				at: i
+				put: (ThirtyTwoBitRegister new load: (c * i sin abs) truncated) ].
+	ShiftTable := { 
+		#(7 12 17 22 ).
+		#(5 9 14 20 ).
+		#(4 11 16 23 ).
+		#(6 10 15 21 )
+	 }.
+	IndexTable := { 
+		#(
+			1
+			2
+			3
+			4
+			5
+			6
+			7
+			8
+			9
+			10
+			11
+			12
+			13
+			14
+			15
+			16
+		).
+		#(
+			2
+			7
+			12
+			1
+			6
+			11
+			16
+			5
+			10
+			15
+			4
+			9
+			14
+			3
+			8
+			13
+		).
+		#(
+			6
+			9
+			12
+			15
+			2
+			5
+			8
+			11
+			14
+			1
+			4
+			7
+			10
+			13
+			16
+			3
+		).
+		#(
+			1
+			8
+			15
+			6
+			13
+			4
+			11
+			2
+			9
+			16
+			7
+			14
+			5
+			12
+			3
+			10
+		)
+	 }.
+	ABCDTable := { 
+		#(1 2 3 4 ).
+		#(4 1 2 3 ).
+		#(3 4 1 2 ).
+		#(2 3 4 1 )
+	 }! !
 
 !SHA1 methodsFor: 'private' stamp: 'jm 12/7/1999 23:25'!
 constantForStep: i
@@ -657,5 +1056,6 @@ storeInto: aByteArray at: index	"Store my 32-bit value into the four bytes of t
 
 !ThirtyTwoBitRegister class methodsFor: 'instance creation' stamp: 'jm 12/14/1999 16:05'!
 new	"Answer a new instance whose initial contents is zero."	^ super new load: 0! !
+MD5NonPrimitive initialize!
 SHA1 initialize!
 SecureHashAlgorithm initialize!
